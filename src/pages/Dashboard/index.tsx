@@ -1,78 +1,176 @@
-import React, { useState, useEffect } from 'react';
-import FeatherIcon from 'react-native-vector-icons/Feather';
+import React, { useEffect, useState } from 'react';
+import { Image, ScrollView } from 'react-native';
 
-import { View, Image } from 'react-native';
+import Icon from 'react-native-vector-icons/Feather';
+import { useNavigation } from '@react-navigation/native';
+import Logo from '../../assets/logo-header.png';
+import SearchInput from '../../components/SearchInput';
 
-import formatValue from '../../utils/formatValue';
-import { useCart } from '../../hooks/cart';
 import api from '../../services/api';
-
-import FloatingCart from '../../components/FloatingCart';
+import formatValue from '../../utils/formatValue';
 
 import {
   Container,
-  ProductContainer,
-  ProductImage,
-  ProductList,
-  Product,
-  ProductTitle,
-  PriceContainer,
-  ProductPrice,
-  ProductButton,
+  Header,
+  FilterContainer,
+  Title,
+  CategoryContainer,
+  CategorySlider,
+  CategoryItem,
+  CategoryItemTitle,
+  FoodsContainer,
+  FoodList,
+  Food,
+  FoodImageContainer,
+  FoodContent,
+  FoodTitle,
+  FoodDescription,
+  FoodPricing,
 } from './styles';
 
-interface Product {
-  id: string;
+interface Food {
+  id: number;
+  name: string;
+  description: string;
+  price: number;
+  thumbnail_url: string;
+  formattedPrice: string;
+}
+
+interface Category {
+  id: number;
   title: string;
   image_url: string;
-  price: number;
 }
 
 const Dashboard: React.FC = () => {
-  const { addToCart } = useCart();
+  const [foods, setFoods] = useState<Food[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState<
+    number | undefined
+  >();
+  const [searchValue, setSearchValue] = useState('');
 
-  const [products, setProducts] = useState<Product[]>([]);
+  const navigation = useNavigation();
+
+  async function handleNavigate(id: number): Promise<void> {
+    navigation.navigate('FoodDetails', { id, category: selectedCategory });
+  }
 
   useEffect(() => {
-    async function loadProducts(): Promise<void> {
-      // TODO
+    async function loadFoods(): Promise<void> {
+      try {
+        const response = await api.get('foods', {
+          params: {
+            category_like: selectedCategory,
+            name_like: searchValue,
+          },
+        });
+        const formattedFoods = response.data.map((food: Food) => {
+          return {
+            ...food,
+            formattedPrice: formatValue(food.price),
+          };
+        });
+
+        setFoods(formattedFoods);
+      } catch (error) {
+        console.log(error);
+      }
     }
 
-    loadProducts();
+    loadFoods();
+  }, [selectedCategory, searchValue]);
+
+  useEffect(() => {
+    async function loadCategories(): Promise<void> {
+      const response = await api.get('categories');
+      setCategories(response.data);
+    }
+
+    loadCategories();
   }, []);
 
-  function handleAddToCart(item: Product): void {
-    // TODO
+  function handleSelectCategory(id: number): void {
+    setSearchValue('');
+    if (selectedCategory === id) {
+      setSelectedCategory(undefined);
+    } else {
+      setSelectedCategory(id);
+    }
   }
 
   return (
     <Container>
-      <ProductContainer>
-        <ProductList
-          data={products}
-          keyExtractor={item => item.id}
-          ListFooterComponent={<View />}
-          ListFooterComponentStyle={{
-            height: 80,
-          }}
-          renderItem={({ item }) => (
-            <Product>
-              <ProductImage source={{ uri: item.image_url }} />
-              <ProductTitle>{item.title}</ProductTitle>
-              <PriceContainer>
-                <ProductPrice>{formatValue(item.price)}</ProductPrice>
-                <ProductButton
-                  testID={`add-to-cart-${item.id}`}
-                  onPress={() => handleAddToCart(item)}
-                >
-                  <FeatherIcon size={20} name="plus" color="#C4C4C4" />
-                </ProductButton>
-              </PriceContainer>
-            </Product>
-          )}
+      <Header>
+        <Image source={Logo} />
+        <Icon
+          name="log-out"
+          size={24}
+          color="#FFB84D"
+          onPress={() => navigation.navigate('Home')}
         />
-      </ProductContainer>
-      <FloatingCart />
+      </Header>
+      <FilterContainer>
+        <SearchInput
+          value={searchValue}
+          onChangeText={setSearchValue}
+          placeholder="Qual comida você procura?"
+        />
+      </FilterContainer>
+      <ScrollView>
+        <CategoryContainer>
+          <Title>Categorias</Title>
+          <CategorySlider
+            contentContainerStyle={{
+              paddingHorizontal: 20,
+            }}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+          >
+            {categories.map(category => (
+              <CategoryItem
+                key={category.id}
+                isSelected={category.id === selectedCategory}
+                onPress={() => handleSelectCategory(category.id)}
+                activeOpacity={0.6}
+                testID={`category-${category.id}`}
+              >
+                <Image
+                  style={{ width: 56, height: 56 }}
+                  source={{ uri: category.image_url }}
+                />
+                <CategoryItemTitle>{category.title}</CategoryItemTitle>
+              </CategoryItem>
+            ))}
+          </CategorySlider>
+        </CategoryContainer>
+        <FoodsContainer>
+          <Title>Pratos</Title>
+          <FoodList>
+            {foods.map(food => (
+              <Food
+                key={food.id}
+                onPress={() => handleNavigate(food.id)}
+                activeOpacity={0.6}
+                testID={`food-${food.id}`}
+              >
+                <FoodImageContainer>
+                  <Image
+                    style={{ width: 88, height: 88 }}
+                    source={{ uri: food.thumbnail_url }}
+                  />
+                </FoodImageContainer>
+                <FoodContent>
+                  <FoodTitle>{food.name}</FoodTitle>
+                  <FoodDescription>{food.description}</FoodDescription>
+                  <FoodPricing>{food.formattedPrice}</FoodPricing>
+                </FoodContent>
+              </Food>
+            ))}
+          </FoodList>
+        </FoodsContainer>
+      </ScrollView>
     </Container>
   );
 };
